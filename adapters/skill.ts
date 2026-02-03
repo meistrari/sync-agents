@@ -46,8 +46,7 @@ export async function transformSkill(
   const codexFrontmatter = toCodexFrontmatter(data);
   const adaptedContent = adaptContent(content);
 
-  const header = `> Auto-generated from Claude Code skill \`${name}\` by sync-agents\n\n`;
-  const output = matter.stringify(header + adaptedContent.trimStart(), codexFrontmatter);
+  const output = matter.stringify(adaptedContent.trimStart(), codexFrontmatter);
 
   const outDir = join(outputDir, name);
   const outFile = join(outDir, "SKILL.md");

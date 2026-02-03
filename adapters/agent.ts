@@ -53,8 +53,7 @@ export async function transformAgent(
   const codexFrontmatter = agentToCodexFrontmatter(data);
   const adaptedContent = adaptAgentContent(content);
 
-  const header = `> Auto-generated from Claude Code agent \`${name}\` by sync-agents\n\n`;
-  const output = matter.stringify(header + adaptedContent.trimStart(), codexFrontmatter);
+  const output = matter.stringify(adaptedContent.trimStart(), codexFrontmatter);
 
   const outDir = join(outputDir, name);
   const outFile = join(outDir, "SKILL.md");

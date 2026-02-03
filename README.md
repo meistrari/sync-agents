@@ -1,8 +1,9 @@
 # sync-agents
-
 [![npm version](https://img.shields.io/npm/v/sync-agents.svg)](https://www.npmjs.com/package/sync-agents)
 [![npm downloads](https://img.shields.io/npm/dm/sync-agents.svg)](https://www.npmjs.com/package/sync-agents)
 [![license](https://img.shields.io/npm/l/sync-agents.svg)](https://www.npmjs.com/package/sync-agents)
+
+https://github.com/user-attachments/assets/353df8ad-2393-4efd-8526-d6c4b73e3a8c
 
 Bi-directional sync between [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and [Codex](https://openai.com/index/introducing-codex/) skills and agents.
 

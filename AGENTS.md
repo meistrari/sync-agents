@@ -16,7 +16,7 @@ bun cli.ts --dry-run          # Preview without writing
 - `sync.ts` — Orchestration. Discovers Claude skills/agents and Codex skills, then syncs missing items both ways. Delegates to adapters.
 - `adapters/skill.ts` — Transforms a Claude skill directory into a Codex skill. Parses YAML frontmatter with `gray-matter`, strips Claude-specific fields, adapts tool references in content, copies `.ts` files to `scripts/`, and copies sub-markdown docs.
 - `adapters/agent.ts` — Transforms a Claude agent `.md` file into a Codex skill folder with SKILL.md. Merges agent metadata (model, description) into Codex frontmatter.
-- `adapters/codex.ts` — Transforms a Codex skill directory into a Claude skill or agent. Preserves frontmatter, adds an auto-generation notice, copies `scripts/*.ts` into the Claude skill root, and passes through extra markdown docs.
+- `adapters/codex.ts` — Transforms a Codex skill directory into a Claude skill or agent. Preserves frontmatter, copies `scripts/*.ts` into the Claude skill root, and passes through extra markdown docs.
 
 ## Key behaviors
 
@@ -25,7 +25,6 @@ bun cli.ts --dry-run          # Preview without writing
 - Sync direction: Claude → Codex always overwrites by name (Claude wins on conflicts). Codex → Claude is additive only.
 - Codex → Claude: Codex skills become Claude skills unless the content header indicates the skill was generated from a Claude agent, in which case a Claude agent is created.
 - Project docs: if the current directory has `CLAUDE.md` or `AGENTS.md`, the most recently modified file overwrites the other.
-- Each output file gets an auto-generation notice.
 - No build step — runs directly with `bun`.
 
 ## Dependencies

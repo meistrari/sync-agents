@@ -57,8 +57,7 @@ async function writeClaudeSkill(
   if (!frontmatter.name) frontmatter.name = name;
 
   const cleanedContent = stripAutoHeader(content.trimStart()).trimStart();
-  const header = `> Auto-generated from Codex skill \`${name}\` by sync-agents\n\n`;
-  const output = matter.stringify(header + cleanedContent, frontmatter);
+  const output = matter.stringify(cleanedContent, frontmatter);
 
   const entries = await readdir(skillDir, { withFileTypes: true });
   const mdFiles = entries.filter(
@@ -132,8 +131,7 @@ async function writeClaudeAgent(
   if (model) frontmatter.model = model;
 
   const cleanedContent = stripAutoHeader(content.trimStart()).trimStart();
-  const header = `> Auto-generated from Codex skill \`${name}\` by sync-agents\n\n`;
-  const output = matter.stringify(header + cleanedContent, frontmatter);
+  const output = matter.stringify(cleanedContent, frontmatter);
 
   if (!dryRun) {
     await mkdir(outputAgentsDir, { recursive: true });
