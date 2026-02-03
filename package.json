@@ -1,6 +1,6 @@
 {
   "name": "sync-agents",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Sync Claude Code and Codex agents and skills",
   "type": "module",
   "bin": {

@@ -8,6 +8,13 @@ import { sync } from "./sync.ts";
 const args = process.argv.slice(2);
 
 const isDryRun = args.includes("--dry-run");
+const isGlobalOnly = args.includes("--global");
+const isLocalOnly = args.includes("--local");
+const noCleanup = args.includes("--no-cleanup");
+
+const syncGlobal = !isLocalOnly;
+const syncLocal = !isGlobalOnly;
+const cleanupCodex = !noCleanup;
 
 const sourceIdx = args.indexOf("--source");
 const sourceDir =
@@ -15,16 +22,21 @@ const sourceDir =
     ? args[sourceIdx + 1]
     : join(homedir(), ".claude");
 
-const outputDir = join(homedir(), ".codex", "skills");
+const agentsDir = join(homedir(), ".agents", "skills");
+const codexDir = join(homedir(), ".codex", "skills");
+
+const getScopeLabel = () => {
+  if (isGlobalOnly) return "Global only (~/.claude <-> ~/.agents)";
+  if (isLocalOnly) return "Local only (current folder)";
+  return "Global + Local";
+};
 
 const banner = [
-  " _____ _____ _      _    ",
-  "|_   _| ____| |    / \\   ",
-  "  | | |  _| | |   / _ \\  ",
-  "  | | | |___| |__/ ___ \\ ",
-  "  |_| |_____|____/_/  \\_\\",
-  "                         ",
-  "      SYNC AGENTS        ",
+  " ____  _   _ _   _  ____      _    ____ _____ _   _ _____ ____  ",
+  "/ ___|| | | | \\ | |/ ___|    / \\  / ___| ____| \\ | |_   _/ ___| ",
+  "\\___ \\| |_| |  \\| | |       / _ \\| |  _|  _| |  \\| | | | \\___ \\ ",
+  " ___) |  _  | |\\  | |___   / ___ \\ |_| | |___| |\\  | | |  ___) |",
+  "|____/|_| |_|_| \\_|\\____| /_/   \\_\\____|_____|_| \\_| |_| |____/ ",
 ].join("\n");
 
 const formatBar = (count: number, total: number, width = 18) => {
@@ -37,19 +49,29 @@ const formatBar = (count: number, total: number, width = 18) => {
 const formatSummaryLine = (label: string, count: number, total: number) =>
   `${label.padEnd(16, " ")} ${formatBar(count, total)} ${count}`;
 
-p.intro("Tela Sync Agents");
+p.intro("Sync Agents");
 p.note(banner);
 
 const configSummary = [
   `Mode:       ${isDryRun ? "Dry run (no writes)" : "Sync (writes enabled)"}`,
-  `Claude dir: ${sourceDir}`,
-  `Codex dir:  ${outputDir}`,
-  `Project:    ${process.cwd()}`,
+  `Scope:      ${getScopeLabel()}`,
+  ...(syncGlobal
+    ? [
+        `Claude dir:  ${sourceDir}`,
+        `Agents dir:  ${agentsDir}`,
+        `Codex dir:   ${codexDir}${cleanupCodex ? " (cleanup enabled)" : ""}`,
+      ]
+    : []),
+  ...(syncLocal ? [`Project:     ${process.cwd()}`] : []),
 ].join("\n");
 
 p.note(configSummary, "Configuration");
 
-let preflight: { claudeExists: boolean; codexExists: boolean } | null = null;
+let preflight: {
+  claudeExists: boolean;
+  agentsExists: boolean;
+  codexExists: boolean;
+} | null = null;
 let result: Awaited<ReturnType<typeof sync>> | null = null;
 
 try {
@@ -57,12 +79,20 @@ try {
     {
       title: "Preflight checks",
       task: (message) => {
-        const claudeExists = existsSync(sourceDir);
-        const codexExists = existsSync(outputDir);
-        preflight = { claudeExists, codexExists };
-        message(
-          `${claudeExists ? "Claude OK" : "Claude missing"} | ${codexExists ? "Codex OK" : "Codex missing"}`
-        );
+        const claudeExists = syncGlobal ? existsSync(sourceDir) : true;
+        const agentsExists = syncGlobal ? existsSync(agentsDir) : true;
+        const codexExists = syncGlobal ? existsSync(codexDir) : true;
+        preflight = { claudeExists, agentsExists, codexExists };
+        if (syncGlobal) {
+          const parts = [
+            claudeExists ? "Claude OK" : "Claude missing",
+            agentsExists ? "Agents OK" : "Agents new",
+            codexExists ? "Codex migrate" : "Codex empty",
+          ];
+          message(parts.join(" | "));
+        } else {
+          message("Local sync only");
+        }
       },
     },
     {
@@ -71,9 +101,13 @@ try {
         message("Transforming and merging items");
         result = await sync({
           claudeDir: sourceDir,
-          codexSkillsDir: outputDir,
+          agentsSkillsDir: agentsDir,
+          codexSkillsDir: codexDir,
           dryRun: isDryRun,
           cwd: process.cwd(),
+          syncGlobal,
+          syncLocal,
+          cleanupCodex,
         });
         return isDryRun ? "Preview ready" : "Sync complete";
       },
@@ -91,38 +125,53 @@ try {
     throw new Error("Sync failed to produce a result.");
   }
 
-  const toCodexTotal =
-    result.toCodex.skills.length + result.toCodex.agents.length;
+  const toAgentsTotal =
+    result.toAgents.skills.length + result.toAgents.agents.length;
   const toClaudeTotal =
     result.toClaude.skills.length + result.toClaude.agents.length;
-  const syncTotal = toCodexTotal + toClaudeTotal;
+  const migratedTotal = result.migratedFromCodex.skills.length;
+  const deletedTotal = result.deletedFromCodex.length;
+  const syncTotal = toAgentsTotal + toClaudeTotal + migratedTotal;
   const docTotal = result.docs.length;
 
-  if (preflight && (!preflight.claudeExists || !preflight.codexExists)) {
-    p.log.warn("One or more source directories are missing.");
+  if (preflight && !preflight.claudeExists) {
+    p.log.warn("Claude directory is missing.");
   }
 
   if (syncTotal === 0 && docTotal === 0) {
-    p.log.warn(
-      `No new items to sync between ${sourceDir} and ${outputDir}`
-    );
+    const scopeMsg = isLocalOnly
+      ? "No project docs to sync"
+      : isGlobalOnly
+        ? `No new items to sync between ${sourceDir} and ${agentsDir}`
+        : `No new items to sync`;
+    p.log.warn(scopeMsg);
   } else {
     const vizTotal = Math.max(syncTotal + docTotal, syncTotal, docTotal, 1);
-    const summaryViz = [
-      formatSummaryLine("Claude -> Codex", toCodexTotal, vizTotal),
-      formatSummaryLine("Codex -> Claude", toClaudeTotal, vizTotal),
-      formatSummaryLine("Project docs", docTotal, vizTotal),
+    const summaryLines = [
+      ...(syncGlobal
+        ? [
+            formatSummaryLine("Claude -> Agents", toAgentsTotal, vizTotal),
+            formatSummaryLine("Codex -> Agents", migratedTotal, vizTotal),
+            formatSummaryLine("Agents -> Claude", toClaudeTotal, vizTotal),
+            ...(deletedTotal > 0
+              ? [formatSummaryLine("Codex cleanup", deletedTotal, vizTotal)]
+              : []),
+          ]
+        : []),
+      ...(syncLocal
+        ? [formatSummaryLine("Project docs", docTotal, vizTotal)]
+        : []),
       formatSummaryLine("Total changes", syncTotal + docTotal, vizTotal),
-    ].join("\n");
+    ];
 
-    p.note(summaryViz, "Sync Summary");
+    p.note(summaryLines.join("\n"), "Sync Summary");
 
-    if (toCodexTotal > 0) {
+    if (toAgentsTotal > 0) {
       const plural = (n: number) => (n === 1 ? "file" : "files");
-      const skillLines = result.toCodex.skills.map(
+      const skillLines = result.toAgents.skills.map(
         (s) => `  ${s.name.padEnd(20)} ${s.files.length} ${plural(s.files.length)}`
       );
-      const agentLines = result.toCodex.agents.map(
+      const agentLines = result.toAgents.agents.map(
         (a) => `  ${a.name.padEnd(20)} ${a.files.length} ${plural(a.files.length)}`
       );
       const lines = [
@@ -133,7 +182,15 @@ try {
           ? [`Agents (${agentLines.length}):`, ...agentLines]
           : []),
       ];
-      p.note(lines.join("\n"), "Claude → Codex");
+      p.note(lines.join("\n"), "Claude → Agents");
+    }
+
+    if (migratedTotal > 0) {
+      const plural = (n: number) => (n === 1 ? "file" : "files");
+      const skillLines = result.migratedFromCodex.skills.map(
+        (s) => `  ${s.name.padEnd(20)} ${s.files.length} ${plural(s.files.length)}`
+      );
+      p.note(skillLines.join("\n"), "Codex → Agents (migrated)");
     }
 
     if (toClaudeTotal > 0) {
@@ -152,7 +209,14 @@ try {
           ? [`Agents (${agentLines.length}):`, ...agentLines]
           : []),
       ];
-      p.note(lines.join("\n"), "Codex → Claude");
+      p.note(lines.join("\n"), "Agents → Claude");
+    }
+
+    if (deletedTotal > 0) {
+      const deletedLines = result.deletedFromCodex.map(
+        (name) => `  ${name}`
+      );
+      p.note(deletedLines.join("\n"), "Cleaned from Codex");
     }
 
     if (docTotal > 0) {
