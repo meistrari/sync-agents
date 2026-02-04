@@ -5,7 +5,7 @@
 
 https://github.com/user-attachments/assets/d061d969-1eef-4784-844c-c788453875c2
 
-Sync between [Claude Code](https://docs.anthropic.com/en/docs/claude-code),[Codex](https://openai.com/index/introducing-codex/) and other coding agents and skills.
+Sync between [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [Codex](https://openai.com/index/introducing-codex/) and other coding agents and skills.
 
 ## Install
 
