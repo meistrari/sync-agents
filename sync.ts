@@ -26,6 +26,12 @@ export interface SyncedDoc {
   action: "created" | "updated";
 }
 
+export interface SyncError {
+  name: string;
+  source: string;
+  message: string;
+}
+
 export interface SyncResult {
   toAgents: {
     skills: SyncedSkill[];
@@ -40,6 +46,7 @@ export interface SyncResult {
   };
   deletedFromCodex: string[];
   docs: SyncedDoc[];
+  errors: SyncError[];
 }
 
 async function discoverSkillDirs(skillsDir: string): Promise<string[]> {
@@ -220,6 +227,7 @@ export async function sync(options: SyncOptions): Promise<SyncResult> {
   const toClaudeAgents: SyncedClaudeItem[] = [];
   let migratedSkills: SyncedSkill[] = [];
   let deletedFromCodex: string[] = [];
+  const errors: SyncError[] = [];
 
   if (syncGlobal) {
     const claudeSkillsDir = join(claudeDir, "skills");
@@ -235,15 +243,31 @@ export async function sync(options: SyncOptions): Promise<SyncResult> {
 
     // Step 1: Claude → Agents (overwrites by name)
     for (const dir of claudeSkillDirs) {
-      const result = await transformSkill(dir, agentsSkillsDir, dryRun);
-      if (result) toAgentsSkills.push(result);
+      try {
+        const result = await transformSkill(dir, agentsSkillsDir, dryRun);
+        if (result) toAgentsSkills.push(result);
+      } catch (err) {
+        errors.push({
+          name: basename(dir),
+          source: dir,
+          message: String(err),
+        });
+      }
     }
 
     for (const path of claudeAgentPaths) {
       const name = basename(path, ".md");
       if (claudeSkillNames.has(name)) continue;
-      const result = await transformAgent(path, agentsSkillsDir, dryRun);
-      if (result) toAgentsAgents.push(result);
+      try {
+        const result = await transformAgent(path, agentsSkillsDir, dryRun);
+        if (result) toAgentsAgents.push(result);
+      } catch (err) {
+        errors.push({
+          name,
+          source: path,
+          message: String(err),
+        });
+      }
     }
 
     // Track names synced from Claude
@@ -273,19 +297,27 @@ export async function sync(options: SyncOptions): Promise<SyncResult> {
     for (const dir of updatedAgentsSkillDirs) {
       const name = basename(dir);
       if (claudeNames.has(name)) continue;
-      const result = await transformCodexSkillToClaude(
-        dir,
-        join(claudeDir, "skills"),
-        join(claudeDir, "agents"),
-        dryRun
-      );
-      if (result) {
-        if (result.kind === "agent") {
-          toClaudeAgents.push(result);
-        } else {
-          toClaudeSkills.push(result);
+      try {
+        const result = await transformCodexSkillToClaude(
+          dir,
+          join(claudeDir, "skills"),
+          join(claudeDir, "agents"),
+          dryRun
+        );
+        if (result) {
+          if (result.kind === "agent") {
+            toClaudeAgents.push(result);
+          } else {
+            toClaudeSkills.push(result);
+          }
+          claudeNames.add(name);
         }
-        claudeNames.add(name);
+      } catch (err) {
+        errors.push({
+          name,
+          source: dir,
+          message: String(err),
+        });
       }
     }
   }
@@ -306,5 +338,6 @@ export async function sync(options: SyncOptions): Promise<SyncResult> {
     },
     deletedFromCodex,
     docs,
+    errors,
   };
 }

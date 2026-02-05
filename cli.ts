@@ -228,6 +228,15 @@ try {
       p.note(docLines.join("\n"), "Project Docs");
     }
   }
+
+  if (result.errors.length > 0) {
+    const errorLines = result.errors.map(
+      (e) => `  ${e.name.padEnd(20)} ${e.message.split("\n")[0]}`
+    );
+    p.log.warn(
+      `Skipped ${result.errors.length} item(s) due to errors:\n${errorLines.join("\n")}`
+    );
+  }
 } catch (err) {
   p.log.error(String(err));
   process.exit(1);
